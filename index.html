@@ -3,68 +3,79 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tab Studio | PLE7</title>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <title>PLE7 TAB STUDIO</title>
     <script src="https://cdn.jsdelivr.net/npm/@coderline/alphatab@latest/dist/alphaTab.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body { margin: 0; font-family: sans-serif; background: #1a1a2e; color: #fff; padding: 20px; }
-        #studio-container { max-width: 1000px; margin: 0 auto; background: rgba(255,255,255,0.05); padding: 20px; border-radius: 20px; }
-        textarea { width: 100%; height: 150px; background: #0f3460; color: #fff; border: 1px solid #16213e; border-radius: 10px; padding: 10px; font-family: monospace; }
-        .controls { display: flex; gap: 10px; margin: 20px 0; justify-content: center; }
-        .btn { padding: 10px 20px; border-radius: 10px; border: none; cursor: pointer; background: #e94560; color: white; font-weight: bold; }
-        #alphaTab { background: white; border-radius: 10px; min-height: 200px; margin-top: 20px; }
-        .at-cursor { background: rgba(233, 69, 96, 0.2); border-left: 2px solid #e94560; } /* Цвет бегущей полоски */
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: #0b0e14; color: #fff; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        #studio-card { width: 95%; max-width: 900px; background: #161b22; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        textarea { width: 100%; height: 120px; background: #0d1117; color: #58a6ff; border: 1px solid #30363d; border-radius: 10px; padding: 10px; font-family: monospace; font-size: 14px; margin-bottom: 15px; }
+        .controls { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .btn { padding: 12px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; transition: 0.2s; background: #238636; color: white; }
+        .btn-play { background: #1f6feb; }
+        .btn-stop { background: #da3633; }
+        #alphaTab { background: white; border-radius: 10px; overflow: hidden; }
+        .status { font-size: 12px; color: #8b949e; margin-top: 10px; }
     </style>
 </head>
 <body>
 
-<div id="studio-container">
-    <h2>🎸 PLE7 TAB STUDIO</h2>
+<div id="studio-card">
+    <h2 style="margin-top:0">🎸 PLE7 TAB STUDIO v2.0</h2>
+    
     <textarea id="tab-input">
 .
 content
 :track 1
 :tuning e5 b4 g4 d4 a3 e3
 .
-4.1 4.1 5.1 7.1 | 4.1 4.1 5.1 7.1
+4.1 5.1 7.1 0.1 | 4.1 5.1 7.1 0.1
     </textarea>
     
     <div class="controls">
-        <button class="btn" onclick="renderTab()">Отобразить</button>
-        <button class="btn" style="background:#0f3460" onclick="playTab()">▶ ИГРАТЬ</button>
-        <button class="btn" style="background:#0f3460" onclick="stopTab()">■ СТОП</button>
+        <button class="btn" onclick="renderTab()">ОТОБРАЗИТЬ</button>
+        <button class="btn btn-play" onclick="playTab()">▶ ИГРАТЬ</button>
+        <button class="btn btn-stop" onclick="stopTab()">■ СТОП</button>
     </div>
 
+    <div id="status" class="status">Статус: Ожидание...</div>
     <div id="alphaTab"></div>
 </div>
 
 <script>
-    const firebaseConfig = { databaseURL: "https://ple7-frts-try-default-rtdb.europe-west1.firebasedatabase.app/" };
-    firebase.initializeApp(firebaseConfig);
-
-    const settings = {
-        file: null,
+    const element = document.querySelector('#alphaTab');
+    
+    // Инициализация API
+    const api = new alphaTab.AlphaTabApi(element, {
         player: {
             enablePlayer: true,
-            soundFont: "https://cdn.jsdelivr.net/npm/@coderline/alphatab@latest/dist/soundfont/sonivox.sf2",
-            scrollElement: '#alphaTab'
+            soundFont: "https://cdn.jsdelivr.net/npm/@coderline/alphatab@latest/dist/soundfont/sonivox.sf2"
         }
-    };
+    });
 
-    const element = document.querySelector('#alphaTab');
-    const api = new alphaTab.AlphaTabApi(element, settings);
+    // Следим за загрузкой звуков
+    api.soundFontLoad.on((e) => {
+        document.getElementById('status').innerText = `Загрузка звуков: ${Math.round(e.loaded / e.total * 100)}%`;
+    });
 
-    // Функция для отрисовки
+    api.soundFontLoaded.on(() => {
+        document.getElementById('status').innerText = "Звуки загружены! Можно играть.";
+    });
+
+    api.playerReady.on(() => {
+        console.log("Плеер готов");
+    });
+
     function renderTab() {
         const tex = document.getElementById('tab-input').value;
         api.tex(tex);
     }
 
-    // Функция для звука (с «прогревом» аудио-контекста)
     function playTab() {
-        // Важно: AlphaTab сам разблокирует звук при вызове play()
+        // Принудительно запускаем аудио-контекст для браузеров
+        if (alphaTab.platform.AudioContext && alphaTab.platform.AudioContext.state === 'suspended') {
+            alphaTab.platform.AudioContext.resume();
+        }
         api.play();
     }
 
@@ -72,10 +83,9 @@ content
         api.stop();
     }
 
-    // Авто-загрузка при старте
-    window.onload = () => {
-        setTimeout(renderTab, 1000);
-    };
+    // Первая отрисовка
+    setTimeout(renderTab, 1500);
 </script>
+
 </body>
 </html>
