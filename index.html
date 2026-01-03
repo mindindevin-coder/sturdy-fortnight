@@ -4,66 +4,74 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PLE7 TAB STUDIO</title>
-    <script src="https://cdn.jsdelivr.net/npm/@coderline/alphatab@latest/dist/alphaTab.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@coderline/alphatab@1.3.0/dist/alphaTab.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: #0b0e14; color: #fff; display: flex; flex-direction: column; align-items: center; padding: 20px; }
-        #studio-card { width: 95%; max-width: 900px; background: #161b22; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        textarea { width: 100%; height: 120px; background: #0d1117; color: #58a6ff; border: 1px solid #30363d; border-radius: 10px; padding: 10px; font-family: monospace; font-size: 14px; margin-bottom: 15px; }
-        .controls { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-        .btn { padding: 12px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; transition: 0.2s; background: #238636; color: white; }
-        .btn-play { background: #1f6feb; }
-        .btn-stop { background: #da3633; }
-        #alphaTab { background: white; border-radius: 10px; overflow: hidden; }
-        .status { font-size: 12px; color: #8b949e; margin-top: 10px; }
+        :root { --accent: #58a6ff; --bg: #0d1117; --panel: #161b22; }
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #fff; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        #studio-card { width: 100%; max-width: 900px; background: var(--panel); padding: 20px; border-radius: 15px; border: 1px solid #30363d; }
+        textarea { width: 100%; height: 180px; background: #000; color: #00ff00; border: 1px solid #333; border-radius: 8px; padding: 12px; font-family: 'Courier New', monospace; font-size: 15px; margin-bottom: 15px; box-sizing: border-box; }
+        .controls { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
+        .btn { padding: 10px 18px; border-radius: 6px; border: none; cursor: pointer; font-weight: bold; background: #21262d; color: #c9d1d9; border: 1px solid #f0f6f033; transition: 0.2s; }
+        .btn:hover { background: #30363d; }
+        .btn-play { background: #238636; color: white; }
+        .btn-play:hover { background: #2ea043; }
+        #alphaTab { background: white; border-radius: 8px; min-height: 150px; }
+        .status-bar { padding: 8px; font-size: 12px; color: #8b949e; background: #000; border-radius: 5px; margin-bottom: 10px; display: flex; justify-content: space-between; }
     </style>
 </head>
 <body>
 
 <div id="studio-card">
-    <h2 style="margin-top:0">🎸 PLE7 TAB STUDIO v2.0</h2>
+    <h2 style="margin: 0 0 15px 0; color: var(--accent);">🎸 TAB EDITOR PRO</h2>
     
+    <div class="status-bar">
+        <div id="status">Загрузка модулей...</div>
+        <div id="load-progress">0%</div>
+    </div>
+
     <textarea id="tab-input">
 .
 content
 :track 1
 :tuning e5 b4 g4 d4 a3 e3
 .
-4.1 5.1 7.1 0.1 | 4.1 5.1 7.1 0.1
+4.1 5.1 7.1 0.1 | 4.1 5.1 7.1 0.1 | 8.2 7.2 5.2 0.2
     </textarea>
     
     <div class="controls">
-        <button class="btn" onclick="renderTab()">ОТОБРАЗИТЬ</button>
-        <button class="btn btn-play" onclick="playTab()">▶ ИГРАТЬ</button>
-        <button class="btn btn-stop" onclick="stopTab()">■ СТОП</button>
+        <button class="btn btn-play" onclick="playTab()"><i class="fas fa-play"></i> ИГРАТЬ</button>
+        <button class="btn" onclick="stopTab()"><i class="fas fa-stop"></i> СТОП</button>
+        <button class="btn" onclick="renderTab()"><i class="fas fa-sync"></i> ОБНОВИТЬ НОТЫ</button>
     </div>
 
-    <div id="status" class="status">Статус: Ожидание...</div>
     <div id="alphaTab"></div>
 </div>
 
 <script>
     const element = document.querySelector('#alphaTab');
     
-    // Инициализация API
+    // Настройки с фиксом для браузеров
     const api = new alphaTab.AlphaTabApi(element, {
+        core: {
+            useWorkers: false // Отключаем воркеры для стабильности на GitHub Pages
+        },
         player: {
             enablePlayer: true,
-            soundFont: "https://cdn.jsdelivr.net/npm/@coderline/alphatab@latest/dist/soundfont/sonivox.sf2"
+            soundFont: "https://cdn.jsdelivr.net/npm/@coderline/alphatab@1.3.0/dist/soundfont/sonivox.sf2"
         }
     });
 
-    // Следим за загрузкой звуков
+    // Отслеживание загрузки звуков
     api.soundFontLoad.on((e) => {
-        document.getElementById('status').innerText = `Загрузка звуков: ${Math.round(e.loaded / e.total * 100)}%`;
+        const percent = Math.round(e.loaded / e.total * 100);
+        document.getElementById('load-progress').innerText = percent + "%";
+        document.getElementById('status').innerText = "Загрузка звуков...";
     });
 
     api.soundFontLoaded.on(() => {
-        document.getElementById('status').innerText = "Звуки загружены! Можно играть.";
-    });
-
-    api.playerReady.on(() => {
-        console.log("Плеер готов");
+        document.getElementById('status').innerText = "Готов к року! Нажми Играть.";
+        document.getElementById('load-progress').innerText = "100%";
     });
 
     function renderTab() {
@@ -72,19 +80,23 @@ content
     }
 
     function playTab() {
-        // Принудительно запускаем аудио-контекст для браузеров
-        if (alphaTab.platform.AudioContext && alphaTab.platform.AudioContext.state === 'suspended') {
-            alphaTab.platform.AudioContext.resume();
+        // Проверка аудио-контекста
+        try {
+            api.play();
+        } catch (e) {
+            console.log("Нужен клик для активации звука");
+            api.play(); 
         }
-        api.play();
     }
 
     function stopTab() {
         api.stop();
     }
 
-    // Первая отрисовка
-    setTimeout(renderTab, 1500);
+    // Инициализация при загрузке
+    window.onload = () => {
+        setTimeout(renderTab, 1000);
+    };
 </script>
 
 </body>
