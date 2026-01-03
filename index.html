@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tab Studio | PLE7</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/alphatab/1.0.0/alphatab-all.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #a8c0ff 0%, #3f2b96 100%); /* Более темный фон для студии */
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        #studio-container {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 25px;
+            padding: 25px;
+            width: 95%;
+            max-width: 1000px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        textarea {
+            width: 100%;
+            height: 250px;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            padding: 15px;
+            color: white;
+            font-family: 'Cascadia Code', 'Consolas', monospace; /* Моноширинный для таб */
+            font-size: 1em;
+            resize: vertical;
+            box-sizing: border-box;
+            outline: none;
+        }
+        .btn {
+            padding: 12px 25px;
+            border-radius: 15px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: linear-gradient(135deg, #8bc6ec 0%, #9599e2 100%);
+            color: white;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
+        .btn:active { transform: scale(0.98); }
+        #player-controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        #alphaTab {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            overflow-x: auto; /* Для прокрутки длинных таб */
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            color: #333;
+        }
+        h1 {
+            color: rgba(255, 255, 255, 0.9);
+            text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        #saved-tabs-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .saved-tab-item {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            padding: 15px;
+            color: white;
+            cursor: pointer;
+            transition: 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .saved-tab-item:hover { background: rgba(255, 255, 255, 0.2); transform: translateY(-2px); }
+        .delete-tab-btn {
+            background: none;
+            border: none;
+            color: #ff6b6b;
+            font-size: 1.2em;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1><i class="fas fa-guitar"></i> AlphaTab Studio</h1>
+
+    <div id="studio-container">
+        <textarea id="tab-input" placeholder="Введите табулатуру или ноты (например, в формате Guitar Pro ASCII или упрощенном формате AlphaTab)..."></textarea>
+        
+        <div id="player-controls">
+            <button class="btn" onclick="renderTab()"><i class="fas fa-eye"></i> Предпросмотр</button>
+            <button class="btn" onclick="playTab()"><i class="fas fa-play"></i> Проиграть</button>
+            <button class="btn" onclick="stopTab()"><i class="fas fa-stop"></i> Стоп</button>
+            <button class="btn" onclick="saveTab()"><i class="fas fa-save"></i> Сохранить</button>
+        </div>
+
+        <div id="alphaTab"></div>
+
+        <h3><i class="fas fa-folder-open"></i> Сохраненные табы:</h3>
+        <div id="saved-tabs-list">
+            Загрузка...
+        </div>
+    </div>
+
+<script>
+    const firebaseConfig = {
+        databaseURL: "https://ple7-frts-try-default-rtdb.europe-west1.firebasedatabase.app/"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const ADMIN_PASS = "immaimdhiesyf"; // Твой пароль
+
+    let alphaTabAPI; // Глобальный объект для AlphaTab
+
+    document.addEventListener('DOMContentLoaded', () => {
+        alphaTabAPI = new alphaTab.api.AlphaTabApi(document.querySelector('#alphaTab'), {
+            file: "data:text/plain;base64,", // Пустой файл по умолчанию
+            layout: {
+                // Масштаб и настройки отображения
+                scale: 1.0,
+                spacing: {
+                    bar: 1.0,
+                    score: 1.0
+                }
+            },
+            player: {
+                enablePlayer: true,
+                soundFont: "https://cdn.jsdelivr.net/npm/@coderline/alphatab@1.0.0/dist/soundfont/sonivox.sf2"
+            }
+        });
+        loadSavedTabs();
+    });
+
+    // Рендерит табы из текстового поля
+    function renderTab() {
+        const tabContent = document.getElementById('tab-input').value;
+        alphaTabAPI.load("data:text/plain;base64," + btoa(tabContent));
+    }
+
+    // Проигрывает текущую табулатуру
+    function playTab() {
+        alphaTabAPI.player.play();
+    }
+
+    // Останавливает проигрывание
+    function stopTab() {
+        alphaTabAPI.player.pause();
+        alphaTabAPI.player.playbackPosition = 0; // Сбрасываем к началу
+    }
+
+    // Сохраняет табы в Firebase
+    function saveTab() {
+        if (prompt("Введите пароль для сохранения:") !== ADMIN_PASS) {
+            alert("Неверный пароль!");
+            return;
+        }
+        
+        let tabName = prompt("Введите название для этой табы:");
+        if (!tabName) return;
+
+        const tabContent = document.getElementById('tab-input').value;
+        if (!tabContent.trim()) {
+            alert("Табулатура пуста!");
+            return;
+        }
+
+        db.ref('tabs').push({
+            name: tabName,
+            content: tabContent,
+            timestamp: firebase.database.ServerValue.TIMESTAMP
+        }).then(() => {
+            alert("Табулатура сохранена!");
+            document.getElementById('tab-input').value = ""; // Очищаем поле
+            renderTab(); // Перерендериваем пустой холст
+            loadSavedTabs(); // Обновляем список сохраненных
+        }).catch(error => {
+            alert("Ошибка сохранения: " + error.message);
+        });
+    }
+
+    // Загружает сохраненные табы из Firebase
+    function loadSavedTabs() {
+        const listContainer = document.getElementById('saved-tabs-list');
+        listContainer.innerHTML = "Загрузка...";
+
+        db.ref('tabs').orderByChild('timestamp').on('value', (snapshot) => {
+            listContainer.innerHTML = "";
+            const tabs = snapshot.val();
+            if (!tabs) {
+                listContainer.innerHTML = "Нет сохраненных таб.";
+                return;
+            }
+
+            for (let id in tabs) {
+                const tab = tabs[id];
+                const item = document.createElement('div');
+                item.className = 'saved-tab-item';
+                item.innerHTML = `
+                    <span>${tab.name}</span>
+                    <div>
+                        <button class="delete-tab-btn" onclick="deleteTab('${id}', event)"><i class="fas fa-trash"></i></button>
+                    </div>
+                `;
+                item.onclick = () => {
+                    document.getElementById('tab-input').value = tab.content;
+                    renderTab();
+                };
+                listContainer.appendChild(item);
+            }
+        });
+    }
+
+    // Удаляет табулатуру
+    function deleteTab(id, event) {
+        event.stopPropagation(); // Чтобы не срабатывал onclick родителя
+        if (prompt("Введите пароль для удаления:") !== ADMIN_PASS) {
+            alert("Неверный пароль!");
+            return;
+        }
+        if (confirm("Удалить эту табулатуру навсегда?")) {
+            db.ref('tabs/' + id).remove()
+                .then(() => alert("Табулатура удалена."))
+                .catch(error => alert("Ошибка удаления: " + error.message));
+        }
+    }
+</script>
+
+</body>
+</html>
